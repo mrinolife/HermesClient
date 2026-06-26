@@ -1,0 +1,44 @@
+name: HermesClient
+options:
+  bundleIdPrefix: com.jznle
+  deploymentTarget:
+    iOS: "18.0"
+  xcodeVersion: "16.0"
+
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    TARGETED_DEVICE_FAMILY: "1"  # iPhone only
+    INFOPLIST_FILE: HermesClient/Info.plist
+    DEVELOPMENT_TEAM: ""  # Set via CI
+
+targets:
+  HermesClient:
+    type: application
+    platform: iOS
+    sources:
+      - path: HermesClient
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.jznle.hermesclient
+        INFOPLIST_FILE: HermesClient/Info.plist
+        MARKETING_VERSION: "1.0.0"
+        CURRENT_PROJECT_VERSION: "1"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+    dependencies: []
+    preBuildScripts:
+      - name: Inject Build Info
+        script: |
+          echo "BUILD_DATE=$(date +%Y-%m-%d)" > /tmp/build_env.txt
+          echo "COMMIT_HASH=${GITHUB_SHA:-local}" >> /tmp/build_env.txt
+
+  ShareExtension:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: ShareExtension
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.jznle.hermesclient.share
+        INFOPLIST_FILE: ShareExtension/Info.plist
+        APPLICATION_EXTENSION_API_ONLY: true
