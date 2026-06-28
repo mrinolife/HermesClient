@@ -6,9 +6,10 @@ struct ContentView: View {
     @State private var webViewTitle = "Hermes"
     @State private var isLoading = false
     @State private var refreshTrigger = UUID()
+    @State private var pendingVoiceInput: String?
     @State private var canGoBack = false
     @State private var showSessions = false
-    @State private var webView: WKWebView?
+    @StateObject private var voice = VoiceManager()
     
     var body: some View {
         NavigationStack {
@@ -20,7 +21,12 @@ struct ContentView: View {
                         onTitleChange: { webViewTitle = $0 },
                         onLoadingChange: { isLoading = $0 },
                         onURLChange: { _ in },
-                        refreshTrigger: $refreshTrigger
+                        onAssistantResponse: { text in
+                            // Speak the assistant's response
+                            voice.speak(text)
+                        },
+                        refreshTrigger: $refreshTrigger,
+                        pendingVoiceInput: $pendingVoiceInput
                     )
                     .edgesIgnoringSafeArea(.bottom)
                 } else {
@@ -37,6 +43,32 @@ struct ContentView: View {
                         .padding(.top, 8)
                     }
                 }
+                
+                // Voice indicator bar
+                if voice.isListening || voice.isSpeaking {
+                    HStack {
+                        Image(systemName: voice.isListening ? "waveform" : "speaker.wave.2")
+                            .foregroundColor(voice.isListening ? .green : accentColor)
+                        
+                        Text(voice.isListening 
+                             ? (voice.transcript.isEmpty ? "Listening..." : voice.transcript)
+                             : "Speaking...")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .lineLimit(1)
+                        
+                        Spacer()
+                        
+                        Button(action: { voice.interrupt() }) {
+                            Image(systemName: "stop.circle.fill")
+                                .foregroundColor(.red)
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+                    .background(.ultraThinMaterial)
+                    .transition(.move(edge: .bottom))
+                }
             }
             .navigationTitle(webViewTitle)
             .navigationBarTitleDisplayMode(.inline)
@@ -46,7 +78,6 @@ struct ContentView: View {
                         Image(systemName: "gear")
                     }
                     
-                    // Pipeline status button (your custom addition)
                     Button(action: { runPipelineCheck() }) {
                         Image(systemName: "target")
                     }
@@ -67,12 +98,13 @@ struct ContentView: View {
                     }
                 }
                 
-                // Bottom toolbar
                 ToolbarItemGroup(placement: .bottomBar) {
-                    Button(action: { /* back */ }) {
-                        Image(systemName: "chevron.left")
+                    // Voice button — main action
+                    Button(action: toggleVoice) {
+                        Image(systemName: voice.isListening ? "waveform.circle.fill" : "mic.circle.fill")
+                            .font(.title2)
+                            .foregroundColor(voice.isListening ? .green : accentColor)
                     }
-                    .disabled(!canGoBack)
                     
                     Spacer()
                     
@@ -106,13 +138,38 @@ struct ContentView: View {
                 SessionsListView()
             }
             .preferredColorScheme(appState.isDarkMode ? .dark : .light)
+            .onAppear {
+                Task { await voice.requestPermission() }
+            }
+        }
+    }
+    
+    private var accentColor: Color {
+        Color(red: 0.42, green: 0.58, blue: 0.96)
+    }
+    
+    private func toggleVoice() {
+        if voice.isListening {
+            voice.stopListening()
+        } else if voice.isSpeaking {
+            voice.interrupt()
+        } else {
+            // Request mic permission and start
+            Task {
+                let granted = await voice.requestPermission()
+                if granted {
+                    voice.startListening { text in
+                        guard !text.isEmpty else { return }
+                        // Inject the transcribed text into the WebView
+                        pendingVoiceInput = text
+                    }
+                }
+            }
         }
     }
     
     private func runPipelineCheck() {
         // Custom: inject pipeline status into WebView
-        // This calls the WebUI's API and shows a native alert
-        // TODO: Wire up to actual edge-pipeline status
     }
     
     private func showShareSheet() {

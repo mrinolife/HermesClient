@@ -49,5 +49,9 @@
     <true/>
     <key>UIFileSharingEnabled</key>
     <true/>
-</dict>
+    <key>NSSpeechRecognitionUsageDescription</key>
+    <string>HermesClient needs speech recognition to transcribe your voice for chat.</string>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>HermesClient needs microphone access for voice chat.</string>
+    </dict>
 </plist>

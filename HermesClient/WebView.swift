@@ -8,8 +8,10 @@ struct WebView: UIViewRepresentable {
     let onTitleChange: (String) -> Void
     let onLoadingChange: (Bool) -> Void
     let onURLChange: (URL) -> Void
+    let onAssistantResponse: (String) -> Void  // NEW: response from JS bridge
     
     @Binding var refreshTrigger: UUID
+    @Binding var pendingVoiceInput: String?  // NEW: text to inject and send
     
     func makeCoordinator() -> Coordinator {
         Coordinator(self)
@@ -22,8 +24,12 @@ struct WebView: UIViewRepresentable {
         
         let userContentController = WKUserContentController()
         
+        // Add message handler for JS bridge responses
+        userContentController.add(context.coordinator, name: "hermesResponse")
+        
         // Inject custom JS bridge
-        if let bridgeJS = try? String(contentsOfFile: Bundle.main.path(forResource: "jsbridge", ofType: "js") ?? "") {
+        if let bridgePath = Bundle.main.path(forResource: "jsbridge", ofType: "js"),
+           let bridgeJS = try? String(contentsOfFile: bridgePath) {
             let script = WKUserScript(source: bridgeJS, injectionTime: .atDocumentEnd, forMainFrameOnly: false)
             userContentController.addUserScript(script)
         }
@@ -60,6 +66,46 @@ struct WebView: UIViewRepresentable {
             webView.reload()
         }
         
+        // Handle pending voice input — inject into chat and send
+        if let text = pendingVoiceInput {
+            context.coordinator.lastPendingText = text
+            
+            let escaped = text
+                .replacingOccurrences(of: "\\", with: "\\\\")
+                .replacingOccurrences(of: "'", with: "\\'")
+                .replacingOccurrences(of: "\n", with: "\\n")
+            
+            let js = """
+            (function() {
+                const input = document.querySelector('textarea, [contenteditable="true"], .composer-input, .input-area textarea');
+                if (input) {
+                    const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set;
+                    nativeInputValueSetter.call(input, '\(escaped)');
+                    input.dispatchEvent(new Event('input', { bubbles: true }));
+                    
+                    // Try to find and click the send button
+                    const sendBtn = document.querySelector('button.send-btn, button[aria-label="Send"], .send-button, button:has(svg)');
+                    if (sendBtn) {
+                        setTimeout(() => sendBtn.click(), 100);
+                    }
+                    
+                    // Notify that voice input was injected
+                    window.webkit.messageHandlers.hermesResponse.postMessage({type: 'voice_sent', text: '\(escaped)'});
+                }
+            })();
+            """
+            webView.evaluateJavaScript(js) { _, error in
+                if let error = error {
+                    print("Voice injection error: \(error)")
+                }
+            }
+            
+            // Clear pending on next tick
+            DispatchQueue.main.async {
+                self.pendingVoiceInput = nil
+            }
+        }
+        
         // Re-inject dark mode if toggled
         let darkModeJS = """
         document.documentElement.dataset.theme = '\(appState.isDarkMode ? "dark" : "light")';
@@ -68,12 +114,10 @@ struct WebView: UIViewRepresentable {
         webView.evaluateJavaScript(darkModeJS, completionHandler: nil)
     }
     
-    class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate {
+    class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptMessageHandler {
         var parent: WebView
         var lastRefresh: UUID = UUID()
-        private var titleObserver: NSKeyValueObservation?
-        private var loadingObserver: NSKeyValueObservation?
-        private var urlObserver: NSKeyValueObservation?
+        var lastPendingText: String = ""
         
         init(_ parent: WebView) {
             self.parent = parent
@@ -100,11 +144,20 @@ struct WebView: UIViewRepresentable {
             handleError(webView, error: error)
         }
         
+        // MARK: - JS Message Handler
+        func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
+            guard let body = message.body as? [String: Any],
+                  let type = body["type"] as? String else { return }
+            
+            if type == "assistant_response", let text = body["text"] as? String {
+                parent.onAssistantResponse(text)
+            }
+        }
+        
         private func handleError(_ webView: WKWebView, error: Error) {
             let nsError = error as NSError
             if nsError.code == NSURLErrorCancelled { return }
             
-            // Show error page
             let html = """
             <html><body style="display:flex;align-items:center;justify-content:center;height:100vh;
             background:#1a1a2e;color:#ccc;font-family:system-ui;text-align:center;padding:20px;">
@@ -118,19 +171,12 @@ struct WebView: UIViewRepresentable {
             webView.loadHTMLString(html, baseURL: nil)
         }
         
-        // Handle new windows/target=_blank
         func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration,
                      for navigationAction: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? {
             if navigationAction.targetFrame == nil {
                 webView.load(navigationAction.request)
             }
             return nil
-        }
-        
-        deinit {
-            titleObserver?.invalidate()
-            loadingObserver?.invalidate()
-            urlObserver?.invalidate()
         }
     }
 }
