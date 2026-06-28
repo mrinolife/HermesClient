@@ -9,6 +9,7 @@ struct ContentView: View {
     @State private var pendingVoiceInput: String?
     @State private var canGoBack = false
     @State private var showSessions = false
+    @State private var inaMood: InaPetView.InaMood = .idle
     @StateObject private var voice = VoiceManager()
     
     var body: some View {
@@ -140,6 +141,15 @@ struct ContentView: View {
             .preferredColorScheme(appState.isDarkMode ? .dark : .light)
             .onAppear {
                 Task { await voice.requestPermission() }
+            }
+            .overlay(alignment: .bottomTrailing) {
+                InaPetView(mood: inaMood)
+                    .padding(.trailing, 16)
+                    .padding(.bottom, 80)
+                    .allowsHitTesting(false)
+            }
+            .onChange(of: voice.isSpeaking) { _, speaking in
+                inaMood = speaking ? .wave : .idle
             }
         }
     }

@@ -20,6 +20,11 @@ class AppState: ObservableObject {
     @Published var isLoading: Bool = false
     @Published var showSettings: Bool = false
     @Published var showShare: Bool = false
+    @Published var pipelineConfirmed: Int = 0
+    @Published var pipelinePending: Int = 0
+    @Published var pipelineLastScan: String = "never"
+    
+    private let sharedDefaults = UserDefaults(suiteName: "group.com.jznle.hermesclient")
     
     // Cached sessions (simplified)
     @Published var cachedSessions: [CachedSession] = []
@@ -62,6 +67,17 @@ class AppState: ObservableObject {
         if let data = try? JSONEncoder().encode(cachedSessions) {
             UserDefaults.standard.set(data, forKey: "cached_sessions")
         }
+    }
+    
+    /// Sync pipeline data to shared defaults for the widget
+    func syncPipeline(confirmed: Int, pending: Int, lastScan: String) {
+        pipelineConfirmed = confirmed
+        pipelinePending = pending
+        pipelineLastScan = lastScan
+        sharedDefaults?.set(confirmed, forKey: "pipeline_confirmed")
+        sharedDefaults?.set(pending, forKey: "pipeline_pending")
+        sharedDefaults?.set(lastScan, forKey: "pipeline_last_scan")
+        sharedDefaults?.synchronize()
     }
 }
 

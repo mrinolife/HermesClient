@@ -49,6 +49,8 @@
     <true/>
     <key>UIFileSharingEnabled</key>
     <true/>
+    <key>NSSupportsLiveActivities</key>
+    <true/>
     <key>NSSpeechRecognitionUsageDescription</key>
     <string>HermesClient needs speech recognition to transcribe your voice for chat.</string>
     <key>NSMicrophoneUsageDescription</key>
