@@ -24,9 +24,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Ruby + XcodeGen
+      - name: Setup XcodeGen
         run: |
-          gem install xcodegen
+          brew install xcodegen
 
       - name: Generate Xcode Project
         run: |
