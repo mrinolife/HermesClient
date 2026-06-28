@@ -19,6 +19,14 @@ jobs:
       - name: Generate Xcode Project
         run: xcodegen generate
 
+      - name: Show targets and sources
+        run: |
+          echo "=== XCODE TARGETS ==="
+          xcodebuild -list -project HermesClient.xcodeproj
+          echo "=== BUILD SETTINGS ==="
+          xcodebuild -project HermesClient.xcodeproj \
+            -scheme HermesClient -showBuildSettings 2>/dev/null | grep -i "swift\|src\|infoplist\|bundle" | head -20
+
       - name: Build
         run: |
           xcodebuild \
@@ -35,7 +43,9 @@ jobs:
           EC=$?
           echo "EXIT_CODE=$EC"
           echo "ERRORS:"
-          grep -n "error:" /tmp/build.log | head -10
-          echo "LAST 15:"
-          tail -15 /tmp/build.log
+          grep "error:" /tmp/build.log | head -5
+          echo "FATAL:"
+          grep "fatal\|FATAL\|Error" /tmp/build.log | head -5
+          echo "TAIL:"
+          tail -5 /tmp/build.log
           exit $EC
