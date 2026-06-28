@@ -4,42 +4,27 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
-    inputs:
-      sign:
-        description: 'Attempt signing (requires secrets)'
-        type: boolean
-        default: false
-
-env:
-  PROJECT_DIR: HermesClient
 
 jobs:
   build:
     runs-on: macos-15
-    strategy:
-      matrix:
-        config: [debug, release]
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
       - name: Setup XcodeGen
-        run: |
-          brew install xcodegen
+        run: brew install xcodegen
 
       - name: Generate Xcode Project
-        run: |
-          cd $PROJECT_DIR
-          xcodegen generate
+        run: xcodegen generate
 
-      - name: Build (${{ matrix.config }})
+      - name: Build (release)
         run: |
-          cd $PROJECT_DIR
           xcodebuild \
             -project HermesClient.xcodeproj \
             -scheme HermesClient \
-            -configuration ${{ matrix.config }} \
+            -configuration Release \
             -sdk iphoneos \
             -derivedDataPath Build \
             CODE_SIGN_IDENTITY="" \
@@ -47,28 +32,16 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             build
 
-      - name: Package .app as .ipa (unsigned)
-        if: matrix.config == 'release'
+      - name: Package .ipa
         run: |
-          cd $PROJECT_DIR
           mkdir -p Payload
           cp -r Build/Build/Products/Release-iphoneos/HermesClient.app Payload/
           zip -r HermesClient-unsigned.ipa Payload/
           rm -rf Payload
 
-      - name: Upload .ipa (unsigned)
-        if: matrix.config == 'release'
+      - name: Upload .ipa
         uses: actions/upload-artifact@v4
         with:
           name: HermesClient-unsigned
-          path: ${{ env.PROJECT_DIR }}/HermesClient-unsigned.ipa
+          path: HermesClient-unsigned.ipa
           retention-days: 7
-
-      - name: Upload .app (debug, for AltStore)
-        if: matrix.config == 'debug'
-        uses: actions/upload-artifact@v4
-        with:
-          name: HermesClient-Debug
-          path: ${{ env.PROJECT_DIR }}/Build/Build/Products/Debug-iphoneos/HermesClient.app
-          retention-days: 3
-          compression-level: 9
