@@ -21,7 +21,6 @@ jobs:
 
       - name: Build
         run: |
-          set -o pipefail
           xcodebuild \
             -project HermesClient.xcodeproj \
             -scheme HermesClient \
@@ -32,32 +31,26 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO \
             DEVELOPMENT_TEAM="" \
-            build 2>&1 | tee /tmp/build_full.log | tail -80
+            build 2>&1 | tee /tmp/build.log; EXIT_CODE=${PIPESTATUS[0]}
+          echo "BUILD_EXIT=$EXIT_CODE" >> $GITHUB_ENV
+          exit $EXIT_CODE
 
-      - name: Check results
+      - name: Upload build log
         if: always()
-        run: |
-          echo "=== Build products ==="
-          find Build -name "*.app" -type d 2>/dev/null
-          echo "=== Build log size ==="
-          wc -l /tmp/build_full.log 2>/dev/null || echo "no log"
-          echo "=== ERROR lines ==="
-          grep -i "error:" /tmp/build_full.log 2>/dev/null | tail -10
-          echo "=== Last 5 lines ==="
-          tail -5 /tmp/build_full.log 2>/dev/null
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: /tmp/build.log
+          retention-days: 3
 
       - name: Package
-        if: success()
         run: |
-          mkdir -p Payload
-          cp -r Build/Build/Products/Release-iphoneos/HermesClient.app Payload/ && echo "App copied" || echo "No app found"
-          zip -r HermesClient-unsigned.ipa Payload/ 2>/dev/null
-          rm -rf Payload
+          cp -r Build/Build/Products/Release-iphoneos/HermesClient.app Payload/ 2>/dev/null && echo "App found" || echo "No app"
+          ls -la Payload/ 2>/dev/null || true
 
-      - name: Upload
-        if: success()
+      - name: Upload .ipa
         uses: actions/upload-artifact@v4
         with:
           name: HermesClient-unsigned
-          path: HermesClient-unsigned.ipa
+          path: Payload/
           retention-days: 7
