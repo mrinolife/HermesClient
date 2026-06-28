@@ -1,4 +1,5 @@
 import Foundation
+import UIKit
 import SwiftUI
 
 /// Native chibi Ina view — runs as a SwiftUI overlay, not in WebView.
