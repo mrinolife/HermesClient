@@ -32,6 +32,10 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             DEVELOPMENT_TEAM="" \
             build 2>&1 | tee /tmp/build.log; EXIT_CODE=${PIPESTATUS[0]}
+          echo "Build exit code: $EXIT_CODE"
+          echo "=== LAST 20 LINES OF BUILD ==="
+          tail -20 /tmp/build.log
+          echo "=== END ==="
           echo "BUILD_EXIT=$EXIT_CODE" >> $GITHUB_ENV
           exit $EXIT_CODE
 
