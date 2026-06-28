@@ -4,23 +4,42 @@ struct SettingsView: View {
     @EnvironmentObject var appState: AppState
     @Environment(\.dismiss) var dismiss
     @State private var serverURL: String = ""
+    @State private var ttsServerURL: String = ""
     @State private var testResult: String?
+    @State private var ttsTestResult: String?
     
     var body: some View {
         NavigationStack {
             Form {
-                Section("Server") {
+                Section("Hermes Server") {
                     TextField("Server URL", text: $serverURL)
                         .keyboardType(.URL)
                         .autocapitalization(.none)
                         .disableAutocorrection(true)
                         .onAppear { serverURL = appState.serverURL }
                     
-                    Button("Test Connection") {
-                        testConnection()
-                    }
+                    Button("Test Connection") { testConnection() }
                     
                     if let result = testResult {
+                        Text(result)
+                            .font(.caption)
+                            .foregroundColor(result.contains("✅") ? .green : .red)
+                    }
+                }
+                
+                Section("Voice Server (CosyVoice / Ina's Voice)") {
+                    TextField("TTS Server URL", text: $ttsServerURL)
+                        .keyboardType(.URL)
+                        .autocapitalization(.none)
+                        .disableAutocorrection(true)
+                        .onAppear {
+                            ttsServerURL = UserDefaults.standard.string(forKey: "tts_server_url")
+                                ?? "https://aibo.tail065eca.ts.net:5055"
+                        }
+                    
+                    Button("Test Voice") { testTTS() }
+                    
+                    if let result = ttsTestResult {
                         Text(result)
                             .font(.caption)
                             .foregroundColor(result.contains("✅") ? .green : .red)
@@ -68,11 +87,18 @@ struct SettingsView: View {
                         Text("1.0.0")
                             .foregroundColor(.secondary)
                     }
-                    
                     HStack {
-                        Text("Server")
+                        Text("Hermes Server")
                         Spacer()
                         Text(appState.serverURL)
+                            .foregroundColor(.secondary)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                    }
+                    HStack {
+                        Text("Voice Server")
+                        Spacer()
+                        Text(ttsServerURL)
                             .foregroundColor(.secondary)
                             .lineLimit(1)
                             .truncationMode(.middle)
@@ -84,21 +110,26 @@ struct SettingsView: View {
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") {
-                        if !serverURL.isEmpty {
-                            // Normalize URL
-                            var url = serverURL.trimmingCharacters(in: .whitespacesAndNewlines)
-                            if !url.hasPrefix("http") {
-                                url = "https://\(url)"
-                            }
-                            if url.hasSuffix("/") {
-                                url = String(url.dropLast())
-                            }
-                            appState.serverURL = url
-                        }
+                        saveSettings()
                         dismiss()
                     }
                 }
             }
+        }
+    }
+    
+    private func saveSettings() {
+        if !serverURL.isEmpty {
+            var url = serverURL.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !url.hasPrefix("http") { url = "https://\(url)" }
+            if url.hasSuffix("/") { url = String(url.dropLast()) }
+            appState.serverURL = url
+        }
+        if !ttsServerURL.isEmpty {
+            var url = ttsServerURL.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !url.hasPrefix("http") { url = "https://\(url)" }
+            if url.hasSuffix("/") { url = String(url.dropLast()) }
+            UserDefaults.standard.set(url, forKey: "tts_server_url")
         }
     }
     
@@ -120,6 +151,31 @@ struct SettingsView: View {
                     testResult = "✅ Connected (\(httpResponse.statusCode))"
                 } else {
                     testResult = "✅ Connected"
+                }
+            }
+        }.resume()
+    }
+    
+    private func testTTS() {
+        ttsTestResult = "Testing..."
+        saveSettings()
+        let urlStr = UserDefaults.standard.string(forKey: "tts_server_url")
+            ?? "https://aibo.tail065eca.ts.net:5055"
+        
+        guard let url = URL(string: "\(urlStr)/health") else {
+            ttsTestResult = "❌ Invalid URL"
+            return
+        }
+        
+        URLSession.shared.dataTask(with: url) { data, response, error in
+            DispatchQueue.main.async {
+                if let error = error {
+                    ttsTestResult = "❌ \(error.localizedDescription)"
+                } else if let httpResponse = response as? HTTPURLResponse,
+                          httpResponse.statusCode == 200 {
+                    ttsTestResult = "✅ CosyVoice ready (Ina's voice)"
+                } else {
+                    ttsTestResult = "❌ Server not ready"
                 }
             }
         }.resume()
