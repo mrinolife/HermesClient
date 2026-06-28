@@ -13,19 +13,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup XcodeGen
-        run: HOMEBREW_NO_REQUIRE_TAP_TRUST=1 brew install xcodegen
-
-      - name: Generate Xcode Project
-        run: xcodegen generate
-
-      - name: Show targets and sources
+      - name: Setup
         run: |
-          echo "=== XCODE TARGETS ==="
-          xcodebuild -list -project HermesClient.xcodeproj
-          echo "=== BUILD SETTINGS ==="
-          xcodebuild -project HermesClient.xcodeproj \
-            -scheme HermesClient -showBuildSettings 2>/dev/null | grep -i "swift\|src\|infoplist\|bundle" | head -20
+          HOMEBREW_NO_REQUIRE_TAP_TRUST=1 brew install xcodegen
+          echo "ready"
+
+      - name: Generate
+        run: xcodegen generate
 
       - name: Build
         run: |
@@ -39,13 +33,4 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO \
             DEVELOPMENT_TEAM="" \
-            build 2>/tmp/build.log
-          EC=$?
-          echo "EXIT_CODE=$EC"
-          echo "ERRORS:"
-          grep "error:" /tmp/build.log | head -5
-          echo "FATAL:"
-          grep "fatal\|FATAL\|Error" /tmp/build.log | head -5
-          echo "TAIL:"
-          tail -5 /tmp/build.log
-          exit $EC
+            build 2>&1 | grep -E "(error:|fatal:|BUILD|EXIT)" | head -20; exit ${PIPESTATUS[0]}
