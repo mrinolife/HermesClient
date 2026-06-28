@@ -19,7 +19,7 @@ jobs:
       - name: Generate Xcode Project
         run: xcodegen generate
 
-      - name: Build (release)
+      - name: Build
         run: |
           xcodebuild \
             -project HermesClient.xcodeproj \
@@ -30,16 +30,17 @@ jobs:
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO \
-            build
+            DEVELOPMENT_TEAM="" \
+            build 2>&1 | tail -40
 
-      - name: Package .ipa
+      - name: Package
         run: |
           mkdir -p Payload
           cp -r Build/Build/Products/Release-iphoneos/HermesClient.app Payload/
           zip -r HermesClient-unsigned.ipa Payload/
           rm -rf Payload
 
-      - name: Upload .ipa
+      - name: Upload
         uses: actions/upload-artifact@v4
         with:
           name: HermesClient-unsigned
