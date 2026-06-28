@@ -19,9 +19,8 @@ jobs:
       - name: Generate Xcode Project
         run: xcodegen generate
 
-      - name: Build
+      - name: Build and capture log
         run: |
-          set -o pipefail
           xcodebuild \
             -project HermesClient.xcodeproj \
             -scheme HermesClient \
@@ -32,16 +31,28 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO \
             DEVELOPMENT_TEAM="" \
-            build 2>&1 | tail -40
+            build 2>&1 | tee build.log | tail -50
+          echo "EXIT_CODE=${PIPESTATUS[0]}" >> $GITHUB_ENV
+          exit ${PIPESTATUS[0]}
+
+      - name: Upload build log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: build.log
+          retention-days: 3
 
       - name: Package
+        if: success()
         run: |
           mkdir -p Payload
           cp -r Build/Build/Products/Release-iphoneos/HermesClient.app Payload/
           zip -r HermesClient-unsigned.ipa Payload/
           rm -rf Payload
 
-      - name: Upload
+      - name: Upload .ipa
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: HermesClient-unsigned
