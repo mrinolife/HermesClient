@@ -14,7 +14,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Setup XcodeGen
-        run: brew install xcodegen
+        run: HOMEBREW_NO_REQUIRE_TAP_TRUST=1 brew install xcodegen
 
       - name: Generate Xcode Project
         run: xcodegen generate
@@ -31,30 +31,11 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO \
             DEVELOPMENT_TEAM="" \
-            build 2>&1 | tee /tmp/build.log; EXIT_CODE=${PIPESTATUS[0]}
-          echo "Build exit code: $EXIT_CODE"
-          echo "=== LAST 20 LINES OF BUILD ==="
-          tail -20 /tmp/build.log
-          echo "=== END ==="
-          echo "BUILD_EXIT=$EXIT_CODE" >> $GITHUB_ENV
-          exit $EXIT_CODE
-
-      - name: Upload build log
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-log
-          path: /tmp/build.log
-          retention-days: 3
-
-      - name: Package
-        run: |
-          cp -r Build/Build/Products/Release-iphoneos/HermesClient.app Payload/ 2>/dev/null && echo "App found" || echo "No app"
-          ls -la Payload/ 2>/dev/null || true
-
-      - name: Upload .ipa
-        uses: actions/upload-artifact@v4
-        with:
-          name: HermesClient-unsigned
-          path: Payload/
-          retention-days: 7
+            build 2>/tmp/build.log
+          EC=$?
+          echo "EXIT_CODE=$EC"
+          echo "ERRORS:"
+          grep -n "error:" /tmp/build.log | head -10
+          echo "LAST 15:"
+          tail -15 /tmp/build.log
+          exit $EC
