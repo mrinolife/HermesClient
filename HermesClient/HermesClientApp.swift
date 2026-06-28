@@ -40,7 +40,7 @@ struct HermesClientApp: App {
     }
     
     private func setupAppearance() {
-        UINavigationBar.appearance().tintColor = UIColor(red: 0.42, green: 0.58, blue: 0.96, alpha: 1)
-        UIToolbar.appearance().tintColor = UIColor(red: 0.42, green: 0.58, blue: 0.96, alpha: 1)
+        UINavigationBar.appearance().tintColor = UIColor(red: 139/255, green: 92/255, blue: 246/255, alpha: 1)  // Ina purple
+        UIToolbar.appearance().tintColor = UIColor(red: 139/255, green: 92/255, blue: 246/255, alpha: 1)
     }
 }
