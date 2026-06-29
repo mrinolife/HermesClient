@@ -161,8 +161,9 @@ struct ContentView: View {
                 if granted {
                     voice.startListening { text in
                         guard !text.isEmpty else { return }
-                        // Inject the transcribed text into the WebView
-                        pendingVoiceInput = text
+                        Task { @MainActor in
+                            pendingVoiceInput = text
+                        }
                     }
                 }
             }
