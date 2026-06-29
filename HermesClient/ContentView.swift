@@ -150,6 +150,7 @@ struct ContentView: View {
     }
     
     private func toggleVoice() {
+        UIImpactFeedbackGenerator(style: .soft).impactOccurred()
         if voice.isListening {
             voice.stopListening()
         } else if voice.isSpeaking {

@@ -8,174 +8,152 @@ struct WebView: UIViewRepresentable {
     let onTitleChange: (String) -> Void
     let onLoadingChange: (Bool) -> Void
     let onURLChange: (URL) -> Void
-    let onAssistantResponse: (String) -> Void  // NEW: response from JS bridge
+    let onAssistantResponse: (String) -> Void
     
     @Binding var refreshTrigger: UUID
-    @Binding var pendingVoiceInput: String?  // NEW: text to inject and send
+    @Binding var pendingVoiceInput: String?
     
-    func makeCoordinator() -> Coordinator {
-        Coordinator(self)
-    }
+    func makeCoordinator() -> Coordinator { Coordinator(self) }
     
     func makeUIView(context: Context) -> WKWebView {
         let config = WKWebViewConfiguration()
         config.allowsInlineMediaPlayback = true
         config.mediaTypesRequiringUserActionForPlayback = []
         
-        let userContentController = WKUserContentController()
+        let ucc = WKUserContentController()
+        ucc.add(context.coordinator, name: "hermesResponse")
         
-        // Add message handler for JS bridge responses
-        userContentController.add(context.coordinator, name: "hermesResponse")
+        // Dark mode injection
+        let darkJS = "document.documentElement.dataset.theme = '\(appState.isDarkMode ? "dark" : "light")';"
+        ucc.addUserScript(WKUserScript(source: darkJS, injectionTime: .atDocumentStart, forMainFrameOnly: true))
         
-        // Inject custom JS bridge
-        if let bridgePath = Bundle.main.path(forResource: "jsbridge", ofType: "js"),
-           let bridgeJS = try? String(contentsOfFile: bridgePath) {
-            let script = WKUserScript(source: bridgeJS, injectionTime: .atDocumentEnd, forMainFrameOnly: false)
-            userContentController.addUserScript(script)
-        }
-        
-        // Inject dark mode override
-        let darkModeJS = """
-        document.documentElement.dataset.theme = '\(appState.isDarkMode ? "dark" : "light")';
+        // Session tracker — watches title changes
+        let sessionJS = """
+        window._hsTitle = document.title;
+        const _hsObs = new MutationObserver(() => {
+            const t = document.title;
+            if (t && t !== window._hsTitle) { window._hsTitle = t;
+                window.webkit.messageHandlers.hermesResponse.postMessage({type: 'session_title', title: t}); }
+        });
+        _hsObs.observe(document.head || document.documentElement, {childList: true, subtree: true, characterData: true});
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden && document.title !== window._hsTitle) { window._hsTitle = document.title;
+                window.webkit.messageHandlers.hermesResponse.postMessage({type: 'session_title', title: document.title}); }
+        });
         """
-        let darkScript = WKUserScript(source: darkModeJS, injectionTime: .atDocumentStart, forMainFrameOnly: true)
-        userContentController.addUserScript(darkScript)
+        ucc.addUserScript(WKUserScript(source: sessionJS, injectionTime: .atDocumentEnd, forMainFrameOnly: true))
         
-        config.userContentController = userContentController
+        config.userContentController = ucc
         
-        let webView = WKWebView(frame: .zero, configuration: config)
-        webView.navigationDelegate = context.coordinator
-        webView.uiDelegate = context.coordinator
-        webView.allowsBackForwardNavigationGestures = true
-        webView.scrollView.contentInsetAdjustmentBehavior = .always
+        let wv = WKWebView(frame: .zero, configuration: config)
+        wv.navigationDelegate = context.coordinator
+        wv.uiDelegate = context.coordinator
+        wv.allowsBackForwardNavigationGestures = true
+        wv.scrollView.contentInsetAdjustmentBehavior = .always
+        if #available(iOS 18.0, *) { wv.configuration.upgradeKnownHostsToHTTPS = false }
         
-        // Performance settings
-        webView.configuration.preferences.setValue(true, forKey: "fullScreenEnabled")
-        if #available(iOS 18.0, *) {
-            webView.configuration.upgradeKnownHostsToHTTPS = false
-        }
-        
-        webView.load(URLRequest(url: url))
-        
-        return webView
+        wv.load(URLRequest(url: url))
+        return wv
     }
     
-    func updateUIView(_ webView: WKWebView, context: Context) {
+    func updateUIView(_ wv: WKWebView, context: Context) {
         if refreshTrigger != context.coordinator.lastRefresh {
             context.coordinator.lastRefresh = refreshTrigger
-            webView.reload()
+            wv.reload()
         }
         
-        // Handle pending voice input — inject into chat and send
+        // Voice input injection
         if let text = pendingVoiceInput {
             context.coordinator.lastPendingText = text
-            
-            let escaped = text
-                .replacingOccurrences(of: "\\", with: "\\\\")
+            let escaped = text.replacingOccurrences(of: "\\", with: "\\\\")
                 .replacingOccurrences(of: "'", with: "\\'")
                 .replacingOccurrences(of: "\n", with: "\\n")
-            
             let js = """
-            (function() {
-                const input = document.querySelector('textarea, [contenteditable="true"], .composer-input, .input-area textarea');
-                if (input) {
-                    const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set;
-                    nativeInputValueSetter.call(input, '\(escaped)');
-                    input.dispatchEvent(new Event('input', { bubbles: true }));
-                    
-                    // Try to find and click the send button
-                    const sendBtn = document.querySelector('button.send-btn, button[aria-label="Send"], .send-button, button:has(svg)');
-                    if (sendBtn) {
-                        setTimeout(() => sendBtn.click(), 100);
-                    }
-                    
-                    // Notify that voice input was injected
-                    window.webkit.messageHandlers.hermesResponse.postMessage({type: 'voice_sent', text: '\(escaped)'});
+            (function(){
+                const i = document.querySelector('textarea, [contenteditable="true"]');
+                if(i){
+                    const s = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype,'value').set;
+                    s.call(i,'\(escaped)'); i.dispatchEvent(new Event('input',{bubbles:true}));
+                    const b = document.querySelector('button[aria-label="Send"], button.send-btn');
+                    if(b) setTimeout(()=>b.click(),100);
+                    window.webkit.messageHandlers.hermesResponse.postMessage({type:'voice_sent',text:'\(escaped)'});
                 }
             })();
             """
-            webView.evaluateJavaScript(js) { _, error in
-                if let error = error {
-                    print("Voice injection error: \(error)")
-                }
-            }
-            
-            // Clear pending on next tick
-            DispatchQueue.main.async {
-                self.pendingVoiceInput = nil
-            }
+            wv.evaluateJavaScript(js) { _, err in if let err = err { print("Voice inj err: \(err)") } }
+            DispatchQueue.main.async { self.pendingVoiceInput = nil }
         }
         
-        // Re-inject dark mode if toggled
-        let darkModeJS = """
-        document.documentElement.dataset.theme = '\(appState.isDarkMode ? "dark" : "light")';
-        document.body.classList.toggle('dark', \(appState.isDarkMode));
-        """
-        webView.evaluateJavaScript(darkModeJS, completionHandler: nil)
+        wv.evaluateJavaScript("""
+            document.documentElement.dataset.theme = '\(appState.isDarkMode ? "dark" : "light")';
+        """, completionHandler: nil)
     }
+    
+    // MARK: - Coordinator
     
     class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptMessageHandler {
         var parent: WebView
-        var lastRefresh: UUID = UUID()
-        var lastPendingText: String = ""
+        var lastRefresh = UUID()
+        var lastPendingText = ""
         
-        init(_ parent: WebView) {
-            self.parent = parent
-        }
+        init(_ p: WebView) { self.parent = p }
         
-        func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
-            parent.onLoadingChange(true)
-        }
+        // MARK: Navigation
+        func webView(_ wv: WKWebView, didStartProvisionalNavigation n: WKNavigation!) { parent.onLoadingChange(true) }
         
-        func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        func webView(_ wv: WKWebView, didFinish n: WKNavigation!) {
             parent.onLoadingChange(false)
-            if let title = webView.title {
-                parent.onTitleChange(title)
+            if let t = wv.title { parent.onTitleChange(t) }
+        }
+        
+        func webView(_ wv: WKWebView, didFail n: WKNavigation!, withError e: Error) {
+            parent.onLoadingChange(false); handleError(wv, error: e)
+        }
+        
+        func webView(_ wv: WKWebView, didFailProvisionalNavigation n: WKNavigation!, withError e: Error) {
+            parent.onLoadingChange(false); handleError(wv, error: e)
+        }
+        
+        // MARK: Auth detection
+        func webView(_ wv: WKWebView, decidePolicyFor r: WKNavigationResponse, decisionHandler h: @escaping (WKNavigationResponsePolicy) -> Void) {
+            if let resp = r.response as? HTTPURLResponse, resp.statusCode == 401 {
+                DispatchQueue.main.async { [self] in
+                    parent.onTitleChange("Login Required")
+                    parent.onLoadingChange(false)
+                }
+            }
+            h(.allow)
+        }
+        
+        // MARK: JS messages
+        func userContentController(_: WKUserContentController, didReceive msg: WKScriptMessage) {
+            guard let body = msg.body as? [String: Any], let type = body["type"] as? String else { return }
+            
+            if type == "assistant_response", let text = body["text"] as? String { parent.onAssistantResponse(text) }
+            
+            if type == "session_title", let title = body["title"] as? String {
+                let session = CachedSession(id: UUID().uuidString, title: title, lastMessage: nil, timestamp: Date())
+                Task { @MainActor in parent.appState.cacheSession(session) }
             }
         }
         
-        func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
-            parent.onLoadingChange(false)
-            handleError(webView, error: error)
-        }
-        
-        func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
-            parent.onLoadingChange(false)
-            handleError(webView, error: error)
-        }
-        
-        // MARK: - JS Message Handler
-        func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
-            guard let body = message.body as? [String: Any],
-                  let type = body["type"] as? String else { return }
-            
-            if type == "assistant_response", let text = body["text"] as? String {
-                parent.onAssistantResponse(text)
-            }
-        }
-        
-        private func handleError(_ webView: WKWebView, error: Error) {
-            let nsError = error as NSError
-            if nsError.code == NSURLErrorCancelled { return }
-            
+        // MARK: Error handling
+        private func handleError(_ wv: WKWebView, error: Error) {
+            let ns = error as NSError
+            if ns.code == NSURLErrorCancelled { return }
             let html = """
             <html><body style="display:flex;align-items:center;justify-content:center;height:100vh;
             background:#1a1a2e;color:#ccc;font-family:system-ui;text-align:center;padding:20px;">
             <div><h1 style="color:#e74c3c;">Connection Error</h1>
-            <p>\(nsError.localizedDescription)</p>
-            <p style="color:#888;font-size:14px;margin-top:20px;">
-            Make sure your server is running and reachable.<br/>
-            Go to Settings to update the server URL.</p>
-            </div></body></html>
+            <p>\(ns.localizedDescription)</p></div></body></html>
             """
-            webView.loadHTMLString(html, baseURL: nil)
+            wv.loadHTMLString(html, baseURL: nil)
         }
         
-        func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration,
-                     for navigationAction: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? {
-            if navigationAction.targetFrame == nil {
-                webView.load(navigationAction.request)
-            }
+        // MARK: New window
+        func webView(_ wv: WKWebView, createWebViewWith cfg: WKWebViewConfiguration,
+                     for action: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? {
+            if action.targetFrame == nil { wv.load(action.request) }
             return nil
         }
     }
