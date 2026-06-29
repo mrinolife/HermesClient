@@ -12,6 +12,7 @@ struct WebView: UIViewRepresentable {
     
     @Binding var refreshTrigger: UUID
     @Binding var pendingVoiceInput: String?
+    @Binding var isReconnecting: Bool
     
     func makeCoordinator() -> Coordinator { Coordinator(self) }
     
@@ -96,13 +97,19 @@ struct WebView: UIViewRepresentable {
         var lastRefresh = UUID()
         var lastPendingText = ""
         
-        init(_ p: WebView) { self.parent = p }
+        private var reconnectTimer: Timer?
+        private var currentURL: URL?
+        
+        init(_ p: WebView) {
+            self.parent = p
+        }
         
         // MARK: Navigation
         func webView(_ wv: WKWebView, didStartProvisionalNavigation n: WKNavigation!) { parent.onLoadingChange(true) }
         
         func webView(_ wv: WKWebView, didFinish n: WKNavigation!) {
             parent.onLoadingChange(false)
+            stopReconnect()
             if let t = wv.title { parent.onTitleChange(t) }
         }
         
@@ -141,13 +148,30 @@ struct WebView: UIViewRepresentable {
         private func handleError(_ wv: WKWebView, error: Error) {
             let ns = error as NSError
             if ns.code == NSURLErrorCancelled { return }
-            let html = """
-            <html><body style="display:flex;align-items:center;justify-content:center;height:100vh;
-            background:#1a1a2e;color:#ccc;font-family:system-ui;text-align:center;padding:20px;">
-            <div><h1 style="color:#e74c3c;">Connection Error</h1>
-            <p>\(ns.localizedDescription)</p></div></body></html>
-            """
-            wv.loadHTMLString(html, baseURL: nil)
+            
+            // Save URL for reconnect
+            if currentURL == nil { currentURL = wv.url }
+            
+            DispatchQueue.main.async { [self] in
+                parent.isReconnecting = true
+                startReconnect(wv)
+            }
+        }
+        
+        private func startReconnect(_ wv: WKWebView) {
+            reconnectTimer?.invalidate()
+            reconnectTimer = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in
+                guard let self = self, let url = self.currentURL else { return }
+                wv.load(URLRequest(url: url))
+            }
+        }
+        
+        private func stopReconnect() {
+            reconnectTimer?.invalidate()
+            reconnectTimer = nil
+            DispatchQueue.main.async { [self] in
+                parent.isReconnecting = false
+            }
         }
         
         // MARK: New window
