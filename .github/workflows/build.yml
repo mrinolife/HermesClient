@@ -13,16 +13,16 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup
-        run: |
-          HOMEBREW_NO_REQUIRE_TAP_TRUST=1 brew install xcodegen
-          echo "ready"
+      - name: Setup XcodeGen
+        run: HOMEBREW_NO_REQUIRE_TAP_TRUST=1 brew install xcodegen
 
-      - name: Generate
+      - name: Generate Xcode Project
         run: xcodegen generate
 
       - name: Build
+        id: build
         run: |
+          set +e
           xcodebuild \
             -project HermesClient.xcodeproj \
             -scheme HermesClient \
@@ -33,4 +33,12 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO \
             DEVELOPMENT_TEAM="" \
-            build 2>&1 | grep -E "(error:|fatal:|BUILD|EXIT)" | head -20; exit ${PIPESTATUS[0]}
+            build > /tmp/xcodebuild.log 2>&1
+          EC=$?
+          echo "EXIT_CODE=$EC" >> $GITHUB_OUTPUT
+          echo "exit code: $EC"
+          echo "=== ERRORS ==="
+          grep -i "error:" /tmp/xcodebuild.log | head -20
+          echo "=== LAST 10 ==="
+          tail -10 /tmp/xcodebuild.log
+          exit $EC
