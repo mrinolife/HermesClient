@@ -152,24 +152,27 @@ struct WebView: UIViewRepresentable {
             // Save URL for reconnect
             if currentURL == nil { currentURL = wv.url }
             
-            DispatchQueue.main.async { [self] in
+            Task { @MainActor in
                 parent.isReconnecting = true
-                startReconnect(wv)
             }
+            startReconnect(wv)
         }
         
         private func startReconnect(_ wv: WKWebView) {
             reconnectTimer?.invalidate()
             reconnectTimer = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in
-                guard let self = self, let url = self.currentURL else { return }
-                wv.load(URLRequest(url: url))
+                guard let self = self else { return }
+                Task { @MainActor in
+                    guard let url = self.currentURL else { return }
+                    wv.load(URLRequest(url: url))
+                }
             }
         }
         
         private func stopReconnect() {
             reconnectTimer?.invalidate()
             reconnectTimer = nil
-            DispatchQueue.main.async { [self] in
+            Task { @MainActor in
                 parent.isReconnecting = false
             }
         }
