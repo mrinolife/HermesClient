@@ -3,6 +3,7 @@ options:
   bundleIdPrefix: com.jznle
   deploymentTarget:
     iOS: "18.0"
+    watchOS: "10.0"
   xcodeVersion: "16.0"
 
 settings:
@@ -27,8 +28,34 @@ targets:
         CURRENT_PROJECT_VERSION: "1"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         SWIFT_EMIT_LOC_STRINGS: "NO"
+        SUPPORTS_LIVE_ACTIVITIES: true
+    dependencies:
+      - target: WidgetExtension
     preBuildScripts:
       - name: Inject Build Info
         script: |
           echo "BUILD_DATE=$(date +%Y-%m-%d)" > /tmp/build_env.txt
           echo "COMMIT_HASH=${GITHUB_SHA:-local}" >> /tmp/build_env.txt
+
+  WidgetExtension:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: WidgetExtension
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.jznle.hermesclient.widget
+        INFOPLIST_FILE: WidgetExtension/Info.plist
+        PRODUCT_NAME: HermesWidgets
+        SUPPORTS_LIVE_ACTIVITIES: true
+
+  WatchApp:
+    type: application
+    platform: watchOS
+    sources:
+      - path: WatchApp
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.jznle.hermesclient.watch
+        INFOPLIST_FILE: WatchApp/Info.plist
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
