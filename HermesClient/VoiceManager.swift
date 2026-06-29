@@ -103,7 +103,7 @@ class VoiceManager: NSObject, ObservableObject, @unchecked Sendable {
                 }
                 
                 if result.isFinal {
-                    DispatchQueue.main.async {
+                    Task { @MainActor in
                         completion(text)
                         self.cleanup()
                     }
