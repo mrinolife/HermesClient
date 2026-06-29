@@ -61,7 +61,7 @@ struct SessionsListView: View {
             
             Text(session.timestamp, style: .relative)
                 .font(.caption2)
-                .foregroundColor(.tertiary)
+                .foregroundStyle(.tertiary)
         }
         .padding(.vertical, 4)
     }
