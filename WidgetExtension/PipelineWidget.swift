@@ -94,7 +94,7 @@ struct PipelineWidgetView: View {
                     .font(.caption2)
                 Spacer()
             }
-            .foregroundColor(.tertiary)
+            .foregroundStyle(.tertiary)
         }
         .padding(12)
     }
