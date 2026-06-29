@@ -40,7 +40,7 @@ class VoiceManager: NSObject, ObservableObject, @unchecked Sendable {
         return status == .authorized
     }
     
-    func startListening(completion: @escaping (String) -> Void) {
+    func startListening(completion: @escaping @Sendable (String) -> Void) {
         guard !isListening else { return }
         
         // Request audio permission
