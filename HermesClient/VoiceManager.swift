@@ -73,7 +73,7 @@ class VoiceManager: NSObject, ObservableObject, @unchecked Sendable {
         }
     }
     
-    private func startSpeechRecognition(completion: @escaping (String) -> Void) throws {
+    private func startSpeechRecognition() throws {
         // Cancel any existing task
         recognitionTask?.cancel()
         recognitionTask = nil
