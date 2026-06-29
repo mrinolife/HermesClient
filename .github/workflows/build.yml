@@ -20,9 +20,7 @@ jobs:
         run: xcodegen generate
 
       - name: Build
-        id: build
         run: |
-          set +e
           xcodebuild \
             -project HermesClient.xcodeproj \
             -scheme HermesClient \
@@ -33,12 +31,17 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO \
             DEVELOPMENT_TEAM="" \
-            build > /tmp/xcodebuild.log 2>&1
-          EC=$?
-          echo "EXIT_CODE=$EC" >> $GITHUB_OUTPUT
-          echo "exit code: $EC"
-          echo "=== ERRORS ==="
-          grep -i "error:" /tmp/xcodebuild.log | head -20
-          echo "=== LAST 10 ==="
-          tail -10 /tmp/xcodebuild.log
-          exit $EC
+            build
+
+      - name: Package
+        run: |
+          mkdir -p Payload
+          cp -r Build/Build/Products/Release-iphoneos/HermesClient.app Payload/
+          zip -r HermesClient-unsigned.ipa Payload
+
+      - name: Upload .ipa
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: HermesClient-unsigned
+          path: HermesClient-unsigned.ipa
