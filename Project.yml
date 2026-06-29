@@ -18,6 +18,7 @@ targets:
     platform: iOS
     sources:
       - path: HermesClient
+      - path: InaAnimation
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.jznle.hermesclient
