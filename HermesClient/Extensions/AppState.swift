@@ -23,6 +23,9 @@ class AppState: ObservableObject {
     @Published var pipelineConfirmed: Int = 0
     @Published var pipelinePending: Int = 0
     @Published var pipelineLastScan: String = "never"
+    @Published var ttsServerURL: String {
+        didSet { UserDefaults.standard.set(ttsServerURL, forKey: "tts_server_url") }
+    }
     
     private let sharedDefaults = UserDefaults(suiteName: "group.com.jznle.hermesclient")
     
@@ -41,6 +44,7 @@ class AppState: ObservableObject {
         self.selectedProfile = UserDefaults.standard.string(forKey: "selected_profile") ?? "bounty"
         self.activeModel = UserDefaults.standard.string(forKey: "active_model") ?? "deepseek/deepseek-v4-flash"
         self.isDarkMode = UserDefaults.standard.object(forKey: "dark_mode") as? Bool ?? true
+        self.ttsServerURL = UserDefaults.standard.string(forKey: "tts_server_url") ?? "http://aibo.tail065eca.ts.net:5055"
         loadCachedSessions()
     }
     

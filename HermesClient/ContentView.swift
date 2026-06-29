@@ -139,6 +139,7 @@ struct ContentView: View {
             }
             .preferredColorScheme(appState.isDarkMode ? .dark : .light)
             .onAppear {
+                voice.configure(ttsURL: appState.ttsServerURL)
                 Task { await voice.requestPermission() }
             }
         }
