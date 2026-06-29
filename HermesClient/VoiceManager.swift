@@ -15,6 +15,7 @@ class VoiceManager: NSObject, ObservableObject, @unchecked Sendable {
     private var recognitionTask: SFSpeechRecognitionTask?
     private let speechRecognizer = SFSpeechRecognizer(locale: Locale(identifier: "en-US"))
     private var ttsServerURL = "http://aibo.tail065eca.ts.net:5055"
+    private var sttCompletion: (@Sendable (String) -> Void)?
     private static let assocKey: UInt8 = 0
     
     override init() {
@@ -41,6 +42,7 @@ class VoiceManager: NSObject, ObservableObject, @unchecked Sendable {
     }
     
     func startListening(completion: @escaping @Sendable (String) -> Void) {
+        sttCompletion = completion
         guard !isListening else { return }
         
         // Request audio permission
@@ -61,7 +63,7 @@ class VoiceManager: NSObject, ObservableObject, @unchecked Sendable {
             }
             
             do {
-                try self.startSpeechRecognition(completion: completion)
+                try self.startSpeechRecognition()
             } catch {
                 DispatchQueue.main.async {
                     self.lastError = "Failed to start: \(error.localizedDescription)"
@@ -104,7 +106,8 @@ class VoiceManager: NSObject, ObservableObject, @unchecked Sendable {
                 
                 if result.isFinal {
                     Task { @MainActor in
-                        completion(text)
+                        self.sttCompletion?(text)
+                        self.sttCompletion = nil
                         self.cleanup()
                     }
                 }
