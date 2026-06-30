@@ -51,6 +51,13 @@ struct WebView: UIViewRepresentable {
         wv.uiDelegate = context.coordinator
         wv.allowsBackForwardNavigationGestures = true
         wv.scrollView.contentInsetAdjustmentBehavior = .always
+        
+        // Pull-to-refresh
+        let refreshControl = UIRefreshControl()
+        refreshControl.tintColor = UIColor(red: 139/255, green: 92/255, blue: 246/255, alpha: 1)
+        refreshControl.addTarget(context.coordinator, action: #selector(Coordinator.handleRefresh), for: .valueChanged)
+        wv.scrollView.refreshControl = refreshControl
+        
         if #available(iOS 18.0, *) { wv.configuration.upgradeKnownHostsToHTTPS = false }
         
         wv.load(URLRequest(url: url))
@@ -102,6 +109,14 @@ struct WebView: UIViewRepresentable {
         
         init(_ p: WebView) {
             self.parent = p
+        }
+        
+        @objc func handleRefresh(_ sender: UIRefreshControl) {
+            if let url = parent.url as? URL {
+                let wv = sender.view?.superview?.superview as? WKWebView
+                wv?.reload()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1) { sender.endRefreshing() }
+            }
         }
         
         // MARK: Navigation

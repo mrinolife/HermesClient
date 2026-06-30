@@ -11,6 +11,7 @@ struct ContentView: View {
     @State private var showSessions = false
     @State private var serverStatus: ServerStatus = .checking
     @State private var isReconnecting = false
+    @State private var showReconnectToast = false
     @StateObject private var voice = VoiceManager()
     
     enum ServerStatus { case checking, reachable, unreachable }
@@ -71,6 +72,16 @@ struct ContentView: View {
                     .padding(6).frame(maxWidth: .infinity)
                     .background(.ultraThinMaterial)
                 }
+                
+                // Reconnect toast
+                if showReconnectToast {
+                    Text("Connected")
+                        .font(.caption).foregroundColor(.white)
+                        .padding(.horizontal, 16).padding(.vertical, 6)
+                        .background(Color.green.opacity(0.8))
+                        .clipShape(Capsule())
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                }
             }
             .navigationTitle(webViewTitle)
             .navigationBarTitleDisplayMode(.inline)
@@ -116,35 +127,55 @@ struct ContentView: View {
                     
                     Spacer()
                     
+                    Button { copyURL() } label: {
+                        Image(systemName: "doc.on.doc")
+                    }
+                    
+                    Spacer()
+                    
                     Button { showShareSheet() } label: {
                         Image(systemName: "square.and.arrow.up")
                     }
                     
                     Spacer()
                     
-                    Menu {
-                        Picker("Profile", selection: $appState.selectedProfile) {
-                            ForEach(appState.profiles, id: \.self) { Text($0).tag($0) }
-                        }
-                        Picker("Model", selection: $appState.activeModel) {
-                            ForEach(appState.models, id: \.self) {
-                                Text($0.components(separatedBy: "/").last ?? $0).tag($0)
+                    // Quick profile switch
+                    HStack(spacing: 4) {
+                        ForEach(appState.profiles, id: \.self) { profile in
+                            Button {
+                                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                                appState.selectedProfile = profile
+                            } label: {
+                                Text(profile.prefix(3).uppercased())
+                                    .font(.caption2).bold()
+                                    .padding(.horizontal, 6).padding(.vertical, 4)
+                                    .background(appState.selectedProfile == profile ? accentColor : Color.gray.opacity(0.2))
+                                    .foregroundColor(appState.selectedProfile == profile ? .white : .secondary)
+                                    .clipShape(Capsule())
                             }
                         }
-                    } label: {
-                        Image(systemName: "ellipsis.circle")
                     }
                 }
             }
             .sheet(isPresented: $appState.showSettings) { SettingsView() }
             .sheet(isPresented: $showSessions) { SessionsListView() }
             .preferredColorScheme(appState.isDarkMode ? .dark : .light)
+            .animation(.easeInOut(duration: 0.3), value: showReconnectToast)
             .onAppear {
                 voice.configure(ttsURL: appState.ttsServerURL)
                 Task { await voice.requestPermission() }
                 checkServer()
             }
             .onReceive(healthTimer) { _ in checkServer() }
+            .onChange(of: isReconnecting) { _, nowReconnecting in
+                if !nowReconnecting {
+                    showReconnectToast = true
+                    Task { @MainActor in
+                        try? await Task.sleep(nanoseconds: 2_000_000_000)
+                        withAnimation { showReconnectToast = false }
+                    }
+                }
+            }
         }
     }
     
@@ -195,6 +226,11 @@ struct ContentView: View {
     
     private func runPipelineCheck() {
         // Opens pipeline view — placeholder for now
+    }
+    
+    private func copyURL() {
+        UIPasteboard.general.string = appState.serverURL
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
     }
     
     private func showShareSheet() {
