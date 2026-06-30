@@ -61,7 +61,7 @@ struct WebView: UIViewRepresentable {
         if #available(iOS 18.0, *) { wv.configuration.upgradeKnownHostsToHTTPS = false }
         
         wv.load(URLRequest(url: url))
-        context.coordinator.webView = wv
+        context.coordinator.wkWebView = wv
         return wv
     }
     
@@ -107,14 +107,14 @@ struct WebView: UIViewRepresentable {
         
         private var reconnectTimer: Timer?
         private var currentURL: URL?
-        private weak var webView: WKWebView?
+        private weak var wkWebView: WKWebView?
         
         init(_ p: WebView) {
             self.parent = p
         }
         
         @objc func handleRefresh(_ sender: UIRefreshControl) {
-            webView?.reload()
+            wkWebView?.reload()
             DispatchQueue.main.asyncAfter(deadline: .now() + 1) { sender.endRefreshing() }
         }
         
