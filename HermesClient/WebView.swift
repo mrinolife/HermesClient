@@ -107,7 +107,7 @@ struct WebView: UIViewRepresentable {
         
         private var reconnectTimer: Timer?
         private var currentURL: URL?
-        private weak var wkWebView: WKWebView?
+        weak var wkWebView: WKWebView?
         
         init(_ p: WebView) {
             self.parent = p
